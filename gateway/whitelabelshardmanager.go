@@ -107,39 +107,7 @@ func (sm *WhitelabelShardManager) Connect() error {
 	}
 
 	for _, bot := range bots {
-		sm.tokensLock.Lock()
-		sm.tokens[bot.BotId] = bot.Token
-		sm.tokensLock.Unlock()
-
-		// create ratelimiter
-		store := ratelimit.NewRedisStore(sm.redis, fmt.Sprintf("ratelimiter:%d", bot.BotId))
-		rateLimiter := ratelimit.NewRateLimiter(store, 1)
-
-		shard := NewShard(bot.Token, 0, rateLimiter, &sm.cache, sm.redis, ShardOptions{
-			ShardCount: ShardCount{
-				Total:   1,
-				Lowest:  0,
-				Highest: 1,
-			},
-			GuildSubscriptions: false,
-			Presence:           user.BuildStatus(user.ActivityTypePlaying, "DM for help | t!help"),
-			Intents: []intents.Intent{
-				intents.Guilds,
-				intents.GuildMembers,
-				intents.GuildMessages,
-				intents.GuildMessageReactions,
-				intents.GuildWebhooks,
-				intents.DirectMessages,
-				intents.DirectMessageReactions,
-			},
-			LargeShardingBuckets: 1,
-		})
-
-		sm.botsLock.Lock()
-		sm.bots[bot.BotId] = shard
-		sm.botsLock.Unlock()
-
-		go shard.EnsureConnect()
+		sm.connectBot(bot)
 	}
 
 	return nil
@@ -151,7 +119,7 @@ func (sm *WhitelabelShardManager) ListenNewTokens() {
 	go tokenchange.ListenTokenChange(sm.redis, ch)
 
 	for payload := range ch {
-		if payload.OldId%uint64(sm.total) != uint64(sm.id) {
+		if payload.OldId % uint64(sm.total) != uint64(sm.id) {
 			continue
 		}
 
@@ -166,6 +134,46 @@ func (sm *WhitelabelShardManager) ListenNewTokens() {
 
 		sm.botsLock.Unlock()
 
-		// TODO: Connect on new ID
+		sm.connectBot(database.WhitelabelBot{
+			UserId: 0, // UserId is not used by connectBot
+			BotId:  payload.NewId,
+			Token:  payload.Token,
+		})
 	}
+}
+
+func (sm *WhitelabelShardManager) connectBot(bot database.WhitelabelBot) {
+	sm.tokensLock.Lock()
+	sm.tokens[bot.BotId] = bot.Token
+	sm.tokensLock.Unlock()
+
+	// create ratelimiter
+	store := ratelimit.NewRedisStore(sm.redis, fmt.Sprintf("ratelimiter:%d", bot.BotId))
+	rateLimiter := ratelimit.NewRateLimiter(store, 1)
+
+	shard := NewShard(bot.Token, 0, rateLimiter, &sm.cache, sm.redis, ShardOptions{
+		ShardCount: ShardCount{
+			Total:   1,
+			Lowest:  0,
+			Highest: 1,
+		},
+		GuildSubscriptions: false,
+		Presence:           user.BuildStatus(user.ActivityTypePlaying, "DM for help | t!help"),
+		Intents: []intents.Intent{
+			intents.Guilds,
+			intents.GuildMembers,
+			intents.GuildMessages,
+			intents.GuildMessageReactions,
+			intents.GuildWebhooks,
+			intents.DirectMessages,
+			intents.DirectMessageReactions,
+		},
+		LargeShardingBuckets: 1,
+	})
+
+	sm.botsLock.Lock()
+	sm.bots[bot.BotId] = shard
+	sm.botsLock.Unlock()
+
+	go shard.EnsureConnect()
 }
