@@ -1,5 +1,5 @@
 package gateway
 
 type ShardManager interface {
-	Connect()
+	Connect() error
 }

@@ -6,25 +6,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/TicketsBot/common/eventforwarding"
+	"github.com/go-redis/redis"
 	"github.com/rxdn/gdl/cache"
 	"github.com/rxdn/gdl/gateway/payloads"
 	"github.com/rxdn/gdl/gateway/payloads/events"
 	"github.com/rxdn/gdl/objects/user"
+	"github.com/rxdn/gdl/rest/ratelimit"
 	"github.com/rxdn/gdl/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/tatsuworks/czlib"
 	"log"
 	"net/http"
 	"nhooyr.io/websocket"
-	"runtime/debug"
 	"sync"
 	"time"
 )
 
 type Shard struct {
-	ShardManager *ShardManager
-	Token        string
-	ShardId      int
+	RateLimiter *ratelimit.Ratelimiter
+	Options     ShardOptions
+	Token       string
+	ShardId     int
 
 	state     State
 	stateLock sync.RWMutex
@@ -32,7 +35,7 @@ type Shard struct {
 	WebSocket  *websocket.Conn
 	context    context.Context
 	zLibReader wrappedReader
-	readLock   *sync.Mutex
+	readLock   sync.Mutex
 
 	sequenceLock   sync.RWMutex
 	sequenceNumber *int
@@ -47,21 +50,24 @@ type Shard struct {
 
 	sessionId string
 
-	Cache cache.Cache
+	Cache *cache.PgCache
+
+	// tickets
+	redis  *redis.Client
+	selfId uint64
 }
 
-func NewShard(shardManager *ShardManager, token string, shardId int) Shard {
-	cache := shardManager.ShardOptions.CacheFactory()
-
+func NewShard(token string, shardId int, rateLimiter *ratelimit.Ratelimiter, cache *cache.PgCache, redis *redis.Client, options ShardOptions) Shard {
 	return Shard{
-		ShardManager:                 shardManager,
+		RateLimiter:                  rateLimiter,
+		Options:                      options,
 		Token:                        token,
 		ShardId:                      shardId,
 		state:                        DEAD,
 		context:                      context.Background(),
 		lastHeartbeatAcknowledgement: utils.GetCurrentTimeMillis(),
 		Cache:                        cache,
-		readLock:                     &sync.Mutex{},
+		redis:                        redis,
 	}
 }
 
@@ -172,23 +178,18 @@ func (s *Shard) Connect() error {
 }
 
 func (s *Shard) identify() {
-	// call hook
-	if s.ShardManager.ShardOptions.Hooks.IdentifyHook != nil {
-		s.ShardManager.ShardOptions.Hooks.IdentifyHook(s)
-	}
-
 	// build payload
 	identify := payloads.NewIdentify(
 		s.ShardId,
-		s.ShardManager.ShardOptions.ShardCount.Total,
+		s.Options.ShardCount.Total,
 		s.Token,
-		s.ShardManager.ShardOptions.Presence,
-		s.ShardManager.ShardOptions.GuildSubscriptions,
-		s.ShardManager.ShardOptions.Intents...,
+		s.Options.Presence,
+		s.Options.GuildSubscriptions,
+		s.Options.Intents...,
 	)
 
 	// wait for ratelimit
-	if err := s.ShardManager.RateLimiter.IdentifyWait(s.ShardId); err != nil {
+	if err := s.RateLimiter.IdentifyWait(s.ShardId); err != nil {
 		logrus.Warnf("shard %d: Error whilst waiting on identify ratelimit: %s", s.ShardId, err.Error())
 	}
 
@@ -239,15 +240,19 @@ func (s *Shard) read() error {
 	case 0: // Event
 		{
 			event := events.EventType(payload.EventName)
-			go s.ExecuteEvent(event, payload.Data)
+			s.ExecuteEvent(event, payload.Data) // cache data
+
+			// forward event to workers
+			go eventforwarding.ForwardEvent(s.redis, eventforwarding.Event{
+				BotToken:  s.Token,
+				BotId:     s.selfId,
+				EventType: payload.EventName,
+				Data:      payload.Data,
+			})
 		}
 	case 7: // Reconnect
 		{
 			logrus.Infof("shard %d: received reconnect payload from discord", s.ShardId)
-
-			if s.ShardManager.ShardOptions.Hooks.ReconnectHook != nil {
-				s.ShardManager.ShardOptions.Hooks.ReconnectHook(s)
-			}
 
 			s.Kill()
 			go s.EnsureConnect()
@@ -331,10 +336,6 @@ func (s *Shard) writeRaw(data []byte) error {
 }
 
 func (s *Shard) Kill() error {
-	if s.ShardManager.ShardOptions.Debug {
-		debug.PrintStack()
-	}
-
 	logrus.Infof("killing shard %d", s.ShardId)
 
 	go func() {
