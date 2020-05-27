@@ -63,7 +63,7 @@ func NewPublicShardManager(options ShardOptions) (manager *PublicShardManager, e
 
 	// create shards
 	for i := options.ShardCount.Lowest; i < options.ShardCount.Highest; i++ {
-		shard := NewShard(manager, os.Getenv("SHARDER_TOKEN"), i, manager.options)
+		shard := NewShard(manager, os.Getenv("SHARDER_TOKEN"), i, manager.limiter, manager.options)
 		manager.shards[i] = &shard
 	}
 
