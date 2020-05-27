@@ -14,15 +14,16 @@ import (
 type PublicShardManager struct {
 	total, id   int
 	token       string
-	rateLimiter *ratelimit.Ratelimiter
+	limiter     *ratelimit.Ratelimiter
 	options     ShardOptions
 	shards      map[int]*Shard
 	cache       cache.PgCache
+	redisClient *redis.Client
 }
 
 func NewPublicShardManager(options ShardOptions) (manager *PublicShardManager, err error) {
 	manager = &PublicShardManager{
-		shards: make(map[int]*Shard),
+		shards:  make(map[int]*Shard),
 		options: options,
 	}
 
@@ -53,16 +54,16 @@ func NewPublicShardManager(options ShardOptions) (manager *PublicShardManager, e
 	}
 
 	// redis
-	redisClient, err := manager.buildRedisClient()
+	manager.redisClient, err = manager.buildRedisClient()
 	if err != nil {
 		return
 	}
 
-	manager.rateLimiter = ratelimit.NewRateLimiter(ratelimit.NewRedisStore(redisClient, "ratelimiter:public"), 1)
+	manager.limiter = ratelimit.NewRateLimiter(ratelimit.NewRedisStore(manager.redisClient, "ratelimiter:public"), 1)
 
 	// create shards
 	for i := options.ShardCount.Lowest; i < options.ShardCount.Highest; i++ {
-		shard := NewShard(os.Getenv("SHARDER_TOKEN"), i, false, manager.rateLimiter, &manager.cache, redisClient, manager.options)
+		shard := NewShard(manager, os.Getenv("SHARDER_TOKEN"), i, manager.options)
 		manager.shards[i] = &shard
 	}
 
@@ -75,6 +76,18 @@ func (sm *PublicShardManager) Connect() error {
 	}
 
 	return nil
+}
+
+func (sm *PublicShardManager) IsWhitelabel() bool {
+	return false
+}
+
+func (sm *PublicShardManager) redis() *redis.Client {
+	return sm.redisClient
+}
+
+func (sm *PublicShardManager) onFatalError(token string, err error) {
+	// TODO: Implement something?
 }
 
 func (sm *PublicShardManager) buildRedisClient() (client *redis.Client, err error) {

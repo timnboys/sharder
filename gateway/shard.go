@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/TicketsBot/common/eventforwarding"
-	"github.com/go-redis/redis"
 	"github.com/rxdn/gdl/cache"
 	"github.com/rxdn/gdl/gateway/payloads"
 	"github.com/rxdn/gdl/gateway/payloads/events"
@@ -24,10 +23,11 @@ import (
 )
 
 type Shard struct {
-	RateLimiter *ratelimit.Ratelimiter
-	Options     ShardOptions
-	Token       string
-	ShardId     int
+	ShardManager ShardManager
+	RateLimiter  *ratelimit.Ratelimiter
+	Options      ShardOptions
+	Token        string
+	ShardId      int
 
 	state     State
 	stateLock sync.RWMutex
@@ -53,13 +53,12 @@ type Shard struct {
 	Cache *cache.PgCache
 
 	// tickets
-	redis        *redis.Client
-	selfId       uint64
-	isWhitelabel bool
+	selfId uint64
 }
 
-func NewShard(token string, shardId int, isWhitelabel bool, rateLimiter *ratelimit.Ratelimiter, cache *cache.PgCache, redis *redis.Client, options ShardOptions) Shard {
+func NewShard(shardManager ShardManager, token string, shardId int, rateLimiter *ratelimit.Ratelimiter, options ShardOptions) Shard {
 	return Shard{
+		ShardManager:                 shardManager,
 		RateLimiter:                  rateLimiter,
 		Options:                      options,
 		Token:                        token,
@@ -67,16 +66,19 @@ func NewShard(token string, shardId int, isWhitelabel bool, rateLimiter *ratelim
 		state:                        DEAD,
 		context:                      context.Background(),
 		lastHeartbeatAcknowledgement: utils.GetCurrentTimeMillis(),
-		Cache:                        cache,
-		redis:                        redis,
-		isWhitelabel:                 isWhitelabel,
 	}
 }
 
 func (s *Shard) EnsureConnect() {
 	if err := s.Connect(); err != nil {
-		// TODO: Parse and handle error
 		logrus.Warnf("shard %d: Error whilst connecting: %s", s.ShardId, err.Error())
+
+		// filter out errors we should delete the token for
+		if errors.Is(err, ErrAuthenticationFailed) || errors.Is(err, ErrDisallowedIntents) || errors.Is(err, ErrShardingRequired) {
+			s.ShardManager.onFatalError(s.Token, err)
+			return
+		}
+
 		time.Sleep(500 * time.Millisecond)
 		s.EnsureConnect()
 	}
@@ -135,6 +137,13 @@ func (s *Shard) Connect() error {
 	if err := s.read(); err != nil {
 		logrus.Warnf("shard %d: Error whilst reading Hello: %s", s.ShardId, err.Error())
 		s.Kill()
+
+		if statusCode := websocket.CloseStatus(err); statusCode != 1 {
+			if gatewayError, found := Errors[int(statusCode)]; found {
+				return gatewayError
+			}
+		}
+
 		return err
 	}
 
@@ -149,6 +158,20 @@ func (s *Shard) Connect() error {
 	s.stateLock.Lock()
 	s.state = CONNECTED
 	s.stateLock.Unlock()
+
+	// read READY to check for auth error etc
+	if err := s.read(); err != nil {
+		logrus.Warnf("shard %d: Error whilst reading Ready: %s", s.ShardId, err.Error())
+		s.Kill()
+
+		if statusCode := websocket.CloseStatus(err); statusCode != 1 {
+			if gatewayError, found := Errors[int(statusCode)]; found {
+				return gatewayError
+			}
+		}
+
+		return err
+	}
 
 	go func() {
 		for {
@@ -254,10 +277,10 @@ func (s *Shard) read() error {
 				}
 
 				// forward event to workers
-				eventforwarding.ForwardEvent(s.redis, eventforwarding.Event{
+				eventforwarding.ForwardEvent(s.ShardManager.redis(), eventforwarding.Event{
 					BotToken:     s.Token,
 					BotId:        s.selfId,
-					IsWhitelabel: s.isWhitelabel,
+					IsWhitelabel: s.ShardManager.IsWhitelabel(),
 					ShardId:      s.ShardId,
 					EventType:    payload.EventName,
 					Data:         payload.Data,

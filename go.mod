@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/TicketsBot/common v0.0.0-20200527165006-0698481afe55
-	github.com/TicketsBot/database v0.0.0-20200527172501-1e0d6a6c6421
+	github.com/TicketsBot/database v0.0.0-20200527224851-af38534b57ab
 	github.com/go-redis/redis v6.15.8+incompatible
 	github.com/jackc/pgx/v4 v4.6.0
 	github.com/rxdn/gdl v0.0.0-20200522202912-4ae241eb98c1

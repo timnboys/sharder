@@ -21,7 +21,7 @@ type WhitelabelShardManager struct {
 
 	db    *database.Database
 	cache cache.PgCache
-	redis *redis.Client
+	redisClient *redis.Client
 
 	bots     map[uint64]Shard
 	botsLock sync.RWMutex
@@ -94,10 +94,10 @@ func (sm *WhitelabelShardManager) connectRedis() (err error) {
 		MinIdleConns: threads,
 	}
 
-	sm.redis = redis.NewClient(options)
+	sm.redisClient = redis.NewClient(options)
 
 	// test conn
-	return sm.redis.Ping().Err()
+	return sm.redisClient.Ping().Err()
 }
 
 func (sm *WhitelabelShardManager) Connect() error {
@@ -113,10 +113,23 @@ func (sm *WhitelabelShardManager) Connect() error {
 	return nil
 }
 
+func (sm *WhitelabelShardManager) IsWhitelabel() bool {
+	return true
+}
+
+func (sm *WhitelabelShardManager) redis() *redis.Client {
+	return sm.redisClient
+}
+
+func (sm *WhitelabelShardManager) onFatalError(token string, err error) {
+	sm.db.Whitelabel.DeleteByToken(token)
+	// TODO: Log for users
+}
+
 // ListenNewTokens before connect
 func (sm *WhitelabelShardManager) ListenNewTokens() {
 	ch := make(chan tokenchange.TokenChangeData)
-	go tokenchange.ListenTokenChange(sm.redis, ch)
+	go tokenchange.ListenTokenChange(sm.redisClient, ch)
 
 	for payload := range ch {
 		if payload.OldId % uint64(sm.total) != uint64(sm.id) {
@@ -148,10 +161,10 @@ func (sm *WhitelabelShardManager) connectBot(bot database.WhitelabelBot) {
 	sm.tokensLock.Unlock()
 
 	// create ratelimiter
-	store := ratelimit.NewRedisStore(sm.redis, fmt.Sprintf("ratelimiter:%d", bot.BotId))
+	store := ratelimit.NewRedisStore(sm.redisClient, fmt.Sprintf("ratelimiter:%d", bot.BotId))
 	rateLimiter := ratelimit.NewRateLimiter(store, 1)
 
-	shard := NewShard(bot.Token, 0, true, rateLimiter, &sm.cache, sm.redis, ShardOptions{
+	shard := NewShard(bot.Token, 0, true, rateLimiter, &sm.cache, sm.redis, sm.db, ShardOptions{
 		ShardCount: ShardCount{
 			Total:   1,
 			Lowest:  0,
