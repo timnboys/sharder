@@ -3,6 +3,8 @@ package main
 import "github.com/TicketsBot/sharder/gateway"
 
 func main() {
+	gateway.OverrideEvents()
+
 	manager, err := gateway.NewWhitelabelShardManager()
 	if err != nil {
 		panic(err)

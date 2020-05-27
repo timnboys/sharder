@@ -151,7 +151,7 @@ func (sm *WhitelabelShardManager) connectBot(bot database.WhitelabelBot) {
 	store := ratelimit.NewRedisStore(sm.redis, fmt.Sprintf("ratelimiter:%d", bot.BotId))
 	rateLimiter := ratelimit.NewRateLimiter(store, 1)
 
-	shard := NewShard(bot.Token, 0, rateLimiter, &sm.cache, sm.redis, ShardOptions{
+	shard := NewShard(bot.Token, 0, true, rateLimiter, &sm.cache, sm.redis, ShardOptions{
 		ShardCount: ShardCount{
 			Total:   1,
 			Lowest:  0,

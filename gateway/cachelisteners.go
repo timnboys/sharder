@@ -31,9 +31,6 @@ func readyListener(s *Shard, e *events.Ready) {
 
 	s.sessionId = e.SessionId
 	s.selfId = e.User.Id
-
-	// Don't store guilds twice
-	//s.Cache.StoreGuilds(e.Guilds)
 }
 
 func channelCreateListener(s *Shard, e *events.ChannelCreate) {
@@ -48,7 +45,10 @@ func channelDeleteListener(s *Shard, e *events.ChannelDelete) {
 	s.Cache.DeleteChannel(e.Channel.Id)
 }
 
-func guildCreateListener(s *Shard, e *events.GuildCreate) {
+func guildCreateListener(s *Shard, e *WrappedGuildCreate) {
+	_, exists := s.Cache.GetGuild(e.Id, false)
+	e.IsJoin = !exists
+
 	s.Cache.StoreGuild(e.Guild)
 }
 

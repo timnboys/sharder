@@ -62,7 +62,7 @@ func NewPublicShardManager(options ShardOptions) (manager *PublicShardManager, e
 
 	// create shards
 	for i := options.ShardCount.Lowest; i < options.ShardCount.Highest; i++ {
-		shard := NewShard(os.Getenv("SHARDER_TOKEN"), i, manager.rateLimiter, &manager.cache, redisClient, manager.options)
+		shard := NewShard(os.Getenv("SHARDER_TOKEN"), i, false, manager.rateLimiter, &manager.cache, redisClient, manager.options)
 		manager.shards[i] = &shard
 	}
 

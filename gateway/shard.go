@@ -53,11 +53,12 @@ type Shard struct {
 	Cache *cache.PgCache
 
 	// tickets
-	redis  *redis.Client
-	selfId uint64
+	redis        *redis.Client
+	selfId       uint64
+	isWhitelabel bool
 }
 
-func NewShard(token string, shardId int, rateLimiter *ratelimit.Ratelimiter, cache *cache.PgCache, redis *redis.Client, options ShardOptions) Shard {
+func NewShard(token string, shardId int, isWhitelabel bool, rateLimiter *ratelimit.Ratelimiter, cache *cache.PgCache, redis *redis.Client, options ShardOptions) Shard {
 	return Shard{
 		RateLimiter:                  rateLimiter,
 		Options:                      options,
@@ -68,6 +69,7 @@ func NewShard(token string, shardId int, rateLimiter *ratelimit.Ratelimiter, cac
 		lastHeartbeatAcknowledgement: utils.GetCurrentTimeMillis(),
 		Cache:                        cache,
 		redis:                        redis,
+		isWhitelabel:                 isWhitelabel,
 	}
 }
 
@@ -239,17 +241,29 @@ func (s *Shard) read() error {
 	switch payload.Opcode {
 	case 0: // Event
 		{
-			event := events.EventType(payload.EventName)
-			s.ExecuteEvent(event, payload.Data) // cache data
+			go func() {
+				eventType := events.EventType(payload.EventName)
+				event := s.ExecuteEvent(eventType, payload.Data) // cache data
 
-			// forward event to workers
-			go eventforwarding.ForwardEvent(s.redis, eventforwarding.Event{
-				BotToken:  s.Token,
-				BotId:     s.selfId,
-				ShardId:   s.ShardId,
-				EventType: payload.EventName,
-				Data:      payload.Data,
-			})
+				// apply extra field
+				var extra eventforwarding.Extra
+				if event != nil {
+					if guildCreate, ok := event.(WrappedGuildCreate); ok {
+						extra.IsJoin = guildCreate.IsJoin
+					}
+				}
+
+				// forward event to workers
+				eventforwarding.ForwardEvent(s.redis, eventforwarding.Event{
+					BotToken:     s.Token,
+					BotId:        s.selfId,
+					IsWhitelabel: s.isWhitelabel,
+					ShardId:      s.ShardId,
+					EventType:    payload.EventName,
+					Data:         payload.Data,
+					Extra:        extra,
+				})
+			}()
 		}
 	case 7: // Reconnect
 		{

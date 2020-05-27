@@ -7,10 +7,10 @@ import (
 	"reflect"
 )
 
-func (s *Shard) ExecuteEvent(eventType events.EventType, data json.RawMessage) {
+func (s *Shard) ExecuteEvent(eventType events.EventType, data json.RawMessage) interface{} {
 	dataType := events.EventTypes[eventType]
 	if dataType == nil {
-		return
+		return nil
 	}
 
 	event := reflect.New(dataType)
@@ -36,5 +36,7 @@ func (s *Shard) ExecuteEvent(eventType events.EventType, data json.RawMessage) {
 			})
 		}
 	}
+
+	return event.Interface()
 }
 
