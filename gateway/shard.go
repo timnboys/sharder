@@ -246,6 +246,7 @@ func (s *Shard) read() error {
 			go eventforwarding.ForwardEvent(s.redis, eventforwarding.Event{
 				BotToken:  s.Token,
 				BotId:     s.selfId,
+				ShardId:   s.ShardId,
 				EventType: payload.EventName,
 				Data:      payload.Data,
 			})

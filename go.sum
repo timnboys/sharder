@@ -1,6 +1,6 @@
 github.com/ReneKroon/ttlcache v1.6.0/go.mod h1:DG6nbhXKUQhrExfwwLuZUdH7UnRDDRA1IW+nBuCssvs=
-github.com/TicketsBot/common v0.0.0-20200526195648-3133d157a2fc h1:3V05rt+wxkh70m2GgDB+cQ0hIQQVVHIA1MT43RYBnrc=
-github.com/TicketsBot/common v0.0.0-20200526195648-3133d157a2fc/go.mod h1:29eWo2xbs8iT8ph2EqA4fMVmbGeGQpNuSGOQIkxGU4U=
+github.com/TicketsBot/common v0.0.0-20200527124150-d2e54c86364f h1:mJR5u8kkXMx4dmKs7hC0PtN6lMipek9AVYDUg7xWXf0=
+github.com/TicketsBot/common v0.0.0-20200527124150-d2e54c86364f/go.mod h1:29eWo2xbs8iT8ph2EqA4fMVmbGeGQpNuSGOQIkxGU4U=
 github.com/TicketsBot/database v0.0.0-20200516170158-fd8a949aec2c/go.mod h1:eky4tBL+IZ0svPgTT0N/9i6j7ygHDQH3784DW+HgfcA=
 github.com/TicketsBot/database v0.0.0-20200526163954-2cb21ac72d23 h1:9MfOsO+H7FsFzATb/SUpg6ySJlqIYYPg38PJIDUFzaI=
 github.com/TicketsBot/database v0.0.0-20200526163954-2cb21ac72d23/go.mod h1:eky4tBL+IZ0svPgTT0N/9i6j7ygHDQH3784DW+HgfcA=

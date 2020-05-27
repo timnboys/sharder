@@ -3,7 +3,7 @@ module github.com/TicketsBot/sharder
 go 1.14
 
 require (
-	github.com/TicketsBot/common v0.0.0-20200526195648-3133d157a2fc
+	github.com/TicketsBot/common v0.0.0-20200527124150-d2e54c86364f
 	github.com/TicketsBot/database v0.0.0-20200526163954-2cb21ac72d23
 	github.com/go-redis/redis v6.15.8+incompatible
 	github.com/jackc/pgx/v4 v4.6.0
