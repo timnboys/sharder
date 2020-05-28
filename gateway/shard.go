@@ -66,6 +66,7 @@ func NewShard(shardManager ShardManager, token string, shardId int, rateLimiter 
 		state:                        DEAD,
 		context:                      context.Background(),
 		lastHeartbeatAcknowledgement: utils.GetCurrentTimeMillis(),
+		Cache:                        shardManager.getCache(),
 	}
 }
 
@@ -277,7 +278,7 @@ func (s *Shard) read() error {
 				}
 
 				// forward event to workers
-				eventforwarding.ForwardEvent(s.ShardManager.redis(), eventforwarding.Event{
+				eventforwarding.ForwardEvent(s.ShardManager.getRedis(), eventforwarding.Event{
 					BotToken:     s.Token,
 					BotId:        s.selfId,
 					IsWhitelabel: s.ShardManager.IsWhitelabel(),

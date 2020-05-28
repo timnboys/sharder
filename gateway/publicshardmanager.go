@@ -53,7 +53,7 @@ func NewPublicShardManager(options ShardOptions) (manager *PublicShardManager, e
 		})
 	}
 
-	// redis
+	// getRedis
 	manager.redisClient, err = manager.buildRedisClient()
 	if err != nil {
 		return
@@ -82,8 +82,12 @@ func (sm *PublicShardManager) IsWhitelabel() bool {
 	return false
 }
 
-func (sm *PublicShardManager) redis() *redis.Client {
+func (sm *PublicShardManager) getRedis() *redis.Client {
 	return sm.redisClient
+}
+
+func (sm *PublicShardManager) getCache() *cache.PgCache {
+	return &sm.cache
 }
 
 func (sm *PublicShardManager) onFatalError(token string, err error) {

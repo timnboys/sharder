@@ -78,7 +78,7 @@ func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
 
 	fmt.Println("Connected to cache, connecting to Redis...")
 
-	// redis
+	// getRedis
 	if err = manager.connectRedis(); err != nil {
 		return
 	}
@@ -125,8 +125,12 @@ func (sm *WhitelabelShardManager) IsWhitelabel() bool {
 	return true
 }
 
-func (sm *WhitelabelShardManager) redis() *redis.Client {
+func (sm *WhitelabelShardManager) getRedis() *redis.Client {
 	return sm.redisClient
+}
+
+func (sm *WhitelabelShardManager) getCache() *cache.PgCache {
+	return &sm.cache
 }
 
 func (sm *WhitelabelShardManager) onFatalError(token string, err error) {
