@@ -46,6 +46,8 @@ func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
 		return
 	}
 
+	fmt.Println("Connecting to DB...")
+
 	// database
 	{
 		db, err := pgxpool.Connect(context.Background(), os.Getenv("SHARDER_PG_URI"))
@@ -55,6 +57,8 @@ func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
 
 		manager.db = database.NewDatabase(db)
 	}
+
+	fmt.Println("Connected to DB, connecting to cache...")
 
 	// cache
 	{
@@ -72,10 +76,14 @@ func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
 		})
 	}
 
+	fmt.Println("Connected to cache, connecting to Redis...")
+
 	// redis
 	if err = manager.connectRedis(); err != nil {
 		return
 	}
+
+	fmt.Println("Connected to Redis.")
 
 	return
 }
