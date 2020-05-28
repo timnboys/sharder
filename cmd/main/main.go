@@ -37,25 +37,23 @@ func main() {
 }
 
 func buildShardCount() (count gateway.ShardCount) {
-	var err error
-
-	// parse total
-	count.Total, err = strconv.Atoi(os.Getenv("SHARDER_COUNT_TOTAL"))
+	clusterSize, err := strconv.Atoi(os.Getenv("SHARDER_CLUSTER_SIZE"))
 	if err != nil {
 		panic(err)
 	}
 
-	// parse highest (exclusive)
-	count.Highest, err = strconv.Atoi(os.Getenv("SHARDER_COUNT_HIGHEST"))
+	sharderCount, err := strconv.Atoi(os.Getenv("SHARDER_TOTAL"))
 	if err != nil {
 		panic(err)
 	}
 
-	// parse lowest (inclusive)
-	count.Lowest, err = strconv.Atoi(os.Getenv("SHARDER_COUNT_LOWEST"))
+	sharderId, err := strconv.Atoi(os.Getenv("SHARDER_ID"))
 	if err != nil {
 		panic(err)
 	}
 
+	count.Lowest = clusterSize * sharderId
+	count.Highest = clusterSize * (sharderId + 1)
+	count.Total = clusterSize * sharderCount
 	return
 }
