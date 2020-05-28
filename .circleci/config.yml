@@ -1,0 +1,33 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.14
+    working_directory: /go/src/github.com/TicketsBot/sharder
+
+    steps:
+      - checkout
+
+      - restore_cache:
+          keys:
+            - v1-pkg-cache
+
+      - run:
+          name: Install czlib
+          command: sudo apt-get install -y zlib1g-dev
+
+      - run:
+          name: Build public sharder
+          command: go build -o public cmd/main/main.go
+
+      - run:
+          name: Build whitelabel sharder
+          command: go build -o whitelabel cmd/whitelabel/main.go
+
+      - store_artifacts:
+          path: /go/src/github.com/TicketsBot/sharder/public
+          destination: public
+
+      - store_artifacts:
+          path: /go/src/github.com/TicketsBot/sharder/whitelabel
+          destination: whitelabel
