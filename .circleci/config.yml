@@ -13,8 +13,8 @@ jobs:
             - v1-pkg-cache
 
       - run:
-          name: Install czlib
-          command: apk add zlib-dev
+          name: Install czlib & GCC
+          command: apk add zlib-dev gcc
 
       - run:
           name: Build public sharder
