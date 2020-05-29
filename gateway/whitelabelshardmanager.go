@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"github.com/TicketsBot/common/statusupdates"
 	"github.com/TicketsBot/common/tokenchange"
 	"github.com/TicketsBot/database"
 	"github.com/go-redis/redis"
@@ -183,7 +184,7 @@ func (sm *WhitelabelShardManager) connectBot(bot database.WhitelabelBot) {
 			Highest: 1,
 		},
 		GuildSubscriptions: false,
-		Presence:           user.BuildStatus(user.ActivityTypePlaying, "DM for help | t!help"),
+		Presence:           user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(bot.BotId)),
 		Intents: []intents.Intent{
 			intents.Guilds,
 			intents.GuildMembers,
@@ -201,4 +202,27 @@ func (sm *WhitelabelShardManager) connectBot(bot database.WhitelabelBot) {
 	sm.botsLock.Unlock()
 
 	go shard.EnsureConnect()
+}
+
+func (sm *WhitelabelShardManager) getStatus(botId uint64) string {
+	customStatus, err := sm.db.WhitelabelStatuses.Get(botId)
+	if err != nil || customStatus == "" {
+		return "DM for help | t!help"
+	} else {
+		return customStatus
+	}
+}
+
+func (sm *WhitelabelShardManager) ListenStatusUpdates() {
+	ch := make(chan uint64)
+	go statusupdates.Listen(sm.redisClient, ch)
+	for botId := range ch {
+		sm.botsLock.RLock()
+		shard, ok := sm.bots[botId]
+		sm.botsLock.RUnlock()
+
+		if ok {
+			shard.UpdateStatus(user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(botId)))
+		}
+	}
 }

@@ -11,9 +11,12 @@ func main() {
 	}
 
 	go manager.ListenNewTokens()
+
 	if err := manager.Connect(); err != nil {
 		panic(err)
 	}
+
+	go manager.ListenStatusUpdates()
 
 	gateway.WaitForInterrupt()
 }
