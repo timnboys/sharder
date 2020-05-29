@@ -20,11 +20,11 @@ import (
 type WhitelabelShardManager struct {
 	total, id int
 
-	db    *database.Database
-	cache cache.PgCache
+	db          *database.Database
+	cache       cache.PgCache
 	redisClient *redis.Client
 
-	bots     map[uint64]Shard
+	bots     map[uint64]*Shard
 	botsLock sync.RWMutex
 
 	tokens     map[uint64]string // bot ID -> token
@@ -33,7 +33,7 @@ type WhitelabelShardManager struct {
 
 func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
 	manager = &WhitelabelShardManager{
-		bots:   make(map[uint64]Shard),
+		bots:   make(map[uint64]*Shard),
 		tokens: make(map[uint64]string),
 	}
 
@@ -145,7 +145,7 @@ func (sm *WhitelabelShardManager) ListenNewTokens() {
 	go tokenchange.ListenTokenChange(sm.redisClient, ch)
 
 	for payload := range ch {
-		if payload.OldId % uint64(sm.total) != uint64(sm.id) {
+		if payload.OldId%uint64(sm.total) != uint64(sm.id) {
 			continue
 		}
 
@@ -198,7 +198,7 @@ func (sm *WhitelabelShardManager) connectBot(bot database.WhitelabelBot) {
 	})
 
 	sm.botsLock.Lock()
-	sm.bots[bot.BotId] = shard
+	sm.bots[bot.BotId] = &shard
 	sm.botsLock.Unlock()
 
 	go shard.EnsureConnect()

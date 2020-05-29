@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"github.com/TicketsBot/sharder/gateway"
 	"github.com/rxdn/gdl/gateway/intents"
 	"github.com/rxdn/gdl/objects/user"
@@ -38,7 +37,6 @@ func main() {
 }
 
 func buildShardCount() (count gateway.ShardCount) {
-	fmt.Println("real")
 	clusterSize, err := strconv.Atoi(os.Getenv("SHARDER_CLUSTER_SIZE"))
 	if err != nil {
 		panic(err)
