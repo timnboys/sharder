@@ -51,17 +51,17 @@ func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
 
 	// database
 	{
-		threads, err := strconv.Atoi(os.Getenv("CACHE_THREADS"))
+		threads, err := strconv.Atoi(os.Getenv("DATABASE_THREADS"))
 		if err != nil {
 			panic(err)
 		}
 
 		connString := fmt.Sprintf(
 			"postgres://%s:%s@%s/%s?pool_max_conns=%d",
-			os.Getenv("CACHE_USER"),
-			os.Getenv("CACHE_PASSWORD"),
-			os.Getenv("CACHE_HOST"),
-			os.Getenv("CACHE_NAME"),
+			os.Getenv("DATABASE_USER"),
+			os.Getenv("DATABASE_PASSWORD"),
+			os.Getenv("DATABASE_HOST"),
+			os.Getenv("DATABASE_NAME"),
 			threads,
 		)
 
