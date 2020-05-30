@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"fmt"
 	"github.com/go-redis/redis"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rxdn/gdl/cache"
@@ -39,7 +40,21 @@ func NewPublicShardManager(options ShardOptions) (manager *PublicShardManager, e
 
 	// cache
 	{
-		db, err := pgxpool.Connect(context.Background(), os.Getenv("SHARDER_CACHE_URI"))
+		threads, err := strconv.Atoi(os.Getenv("CACHE_THREADS"))
+		if err != nil {
+			panic(err)
+		}
+
+		connString := fmt.Sprintf(
+			"postgres://%s:%s@%s/%s?pool_max_conns=%d",
+			os.Getenv("CACHE_USER"),
+			os.Getenv("CACHE_PASSWORD"),
+			os.Getenv("CACHE_HOST"),
+			os.Getenv("CACHE_NAME"),
+			threads,
+		)
+
+		db, err := pgxpool.Connect(context.Background(), connString)
 		if err != nil {
 			return manager, err
 		}

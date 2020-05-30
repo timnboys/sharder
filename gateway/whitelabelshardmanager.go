@@ -51,7 +51,21 @@ func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
 
 	// database
 	{
-		db, err := pgxpool.Connect(context.Background(), os.Getenv("SHARDER_PG_URI"))
+		threads, err := strconv.Atoi(os.Getenv("CACHE_THREADS"))
+		if err != nil {
+			panic(err)
+		}
+
+		connString := fmt.Sprintf(
+			"postgres://%s:%s@%s/%s?pool_max_conns=%d",
+			os.Getenv("CACHE_USER"),
+			os.Getenv("CACHE_PASSWORD"),
+			os.Getenv("CACHE_HOST"),
+			os.Getenv("CACHE_NAME"),
+			threads,
+		)
+
+		db, err := pgxpool.Connect(context.Background(), connString)
 		if err != nil {
 			return manager, err
 		}
@@ -63,7 +77,21 @@ func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
 
 	// cache
 	{
-		db, err := pgxpool.Connect(context.Background(), os.Getenv("SHARDER_CACHE_URI"))
+		threads, err := strconv.Atoi(os.Getenv("CACHE_THREADS"))
+		if err != nil {
+			panic(err)
+		}
+
+		connString := fmt.Sprintf(
+			"postgres://%s:%s@%s/%s?pool_max_conns=%d",
+			os.Getenv("CACHE_USER"),
+			os.Getenv("CACHE_PASSWORD"),
+			os.Getenv("CACHE_HOST"),
+			os.Getenv("CACHE_NAME"),
+			threads,
+		)
+
+		db, err := pgxpool.Connect(context.Background(), connString)
 		if err != nil {
 			return manager, err
 		}
