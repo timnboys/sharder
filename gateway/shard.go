@@ -272,7 +272,7 @@ func (s *Shard) read() error {
 				// apply extra field
 				var extra eventforwarding.Extra
 				if event != nil {
-					if guildCreate, ok := event.(WrappedGuildCreate); ok {
+					if guildCreate, ok := event.(*WrappedGuildCreate); ok {
 						extra.IsJoin = guildCreate.IsJoin
 					}
 				}
