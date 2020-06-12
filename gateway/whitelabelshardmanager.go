@@ -1,293 +1,293 @@
 package gateway
 
 import (
-	"context"
-	"fmt"
-	"github.com/TicketsBot/common/statusupdates"
-	"github.com/TicketsBot/common/tokenchange"
-	"github.com/TicketsBot/common/whitelabeldelete"
-	"github.com/TicketsBot/database"
-	"github.com/go-redis/redis"
-	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/rxdn/gdl/cache"
-	"github.com/rxdn/gdl/gateway/intents"
-	"github.com/rxdn/gdl/objects/user"
-	"github.com/rxdn/gdl/rest/ratelimit"
-	"os"
-	"strconv"
-	"sync"
+  "context"
+  "fmt"
+  "github.com/TicketsBot/common/statusupdates"
+  "github.com/TicketsBot/common/tokenchange"
+  "github.com/TicketsBot/common/whitelabeldelete"
+  "github.com/TicketsBot/database"
+  "github.com/go-redis/redis"
+  "github.com/jackc/pgx/v4/pgxpool"
+  "github.com/rxdn/gdl/cache"
+  "github.com/rxdn/gdl/gateway/intents"
+  "github.com/rxdn/gdl/objects/user"
+  "github.com/rxdn/gdl/rest/ratelimit"
+  "os"
+  "strconv"
+  "sync"
 )
 
 type WhitelabelShardManager struct {
-	total, id int
+  total, id int
 
-	db          *database.Database
-	cache       cache.PgCache
-	redisClient *redis.Client
+  db          *database.Database
+  cache       cache.PgCache
+  redisClient *redis.Client
 
-	bots     map[uint64]*Shard
-	botsLock sync.RWMutex
+  bots     map[uint64]*Shard
+  botsLock sync.RWMutex
 
-	tokens     map[uint64]string // bot ID -> token
-	tokensLock sync.RWMutex
+  tokens     map[uint64]string // bot ID -> token
+  tokensLock sync.RWMutex
 }
 
 func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
-	manager = &WhitelabelShardManager{
-		bots:   make(map[uint64]*Shard),
-		tokens: make(map[uint64]string),
-	}
+  manager = &WhitelabelShardManager{
+    bots:   make(map[uint64]*Shard),
+    tokens: make(map[uint64]string),
+  }
 
-	manager.total, err = strconv.Atoi(os.Getenv("SHARDER_TOTAL"))
-	if err != nil {
-		return
-	}
+  manager.total, err = strconv.Atoi(os.Getenv("SHARDER_TOTAL"))
+  if err != nil {
+    return
+  }
 
-	manager.id, err = strconv.Atoi(os.Getenv("SHARDER_ID"))
-	if err != nil {
-		return
-	}
+  manager.id, err = strconv.Atoi(os.Getenv("SHARDER_ID"))
+  if err != nil {
+    return
+  }
 
-	fmt.Println("Connecting to DB...")
+  fmt.Println("Connecting to DB...")
 
-	// database
-	{
-		threads, err := strconv.Atoi(os.Getenv("DATABASE_THREADS"))
-		if err != nil {
-			panic(err)
-		}
+  // database
+  {
+    threads, err := strconv.Atoi(os.Getenv("DATABASE_THREADS"))
+    if err != nil {
+      panic(err)
+    }
 
-		connString := fmt.Sprintf(
-			"postgres://%s:%s@%s/%s?pool_max_conns=%d",
-			os.Getenv("DATABASE_USER"),
-			os.Getenv("DATABASE_PASSWORD"),
-			os.Getenv("DATABASE_HOST"),
-			os.Getenv("DATABASE_NAME"),
-			threads,
-		)
+    connString := fmt.Sprintf(
+      "postgres://%s:%s@%s/%s?pool_max_conns=%d",
+      os.Getenv("DATABASE_USER"),
+      os.Getenv("DATABASE_PASSWORD"),
+      os.Getenv("DATABASE_HOST"),
+      os.Getenv("DATABASE_NAME"),
+      threads,
+    )
 
-		db, err := pgxpool.Connect(context.Background(), connString)
-		if err != nil {
-			return manager, err
-		}
+    db, err := pgxpool.Connect(context.Background(), connString)
+    if err != nil {
+      return manager, err
+    }
 
-		manager.db = database.NewDatabase(db)
-	}
+    manager.db = database.NewDatabase(db)
+  }
 
-	fmt.Println("Connected to DB, connecting to cache...")
+  fmt.Println("Connected to DB, connecting to cache...")
 
-	// cache
-	{
-		threads, err := strconv.Atoi(os.Getenv("CACHE_THREADS"))
-		if err != nil {
-			panic(err)
-		}
+  // cache
+  {
+    threads, err := strconv.Atoi(os.Getenv("CACHE_THREADS"))
+    if err != nil {
+      panic(err)
+    }
 
-		connString := fmt.Sprintf(
-			"postgres://%s:%s@%s/%s?pool_max_conns=%d",
-			os.Getenv("CACHE_USER"),
-			os.Getenv("CACHE_PASSWORD"),
-			os.Getenv("CACHE_HOST"),
-			os.Getenv("CACHE_NAME"),
-			threads,
-		)
+    connString := fmt.Sprintf(
+      "postgres://%s:%s@%s/%s?pool_max_conns=%d",
+      os.Getenv("CACHE_USER"),
+      os.Getenv("CACHE_PASSWORD"),
+      os.Getenv("CACHE_HOST"),
+      os.Getenv("CACHE_NAME"),
+      threads,
+    )
 
-		db, err := pgxpool.Connect(context.Background(), connString)
-		if err != nil {
-			return manager, err
-		}
+    db, err := pgxpool.Connect(context.Background(), connString)
+    if err != nil {
+      return manager, err
+    }
 
-		manager.cache = cache.NewPgCache(db, cache.CacheOptions{
-			Guilds:   true,
-			Users:    true,
-			Members:  true,
-			Channels: true,
-			Roles:    true,
-		})
-	}
+    manager.cache = cache.NewPgCache(db, cache.CacheOptions{
+      Guilds:   true,
+      Users:    true,
+      Members:  true,
+      Channels: true,
+      Roles:    true,
+    })
+  }
 
-	fmt.Println("Connected to cache, connecting to Redis...")
+  fmt.Println("Connected to cache, connecting to Redis...")
 
-	// getRedis
-	if err = manager.connectRedis(); err != nil {
-		return
-	}
+  // getRedis
+  if err = manager.connectRedis(); err != nil {
+    return
+  }
 
-	fmt.Println("Connected to Redis.")
+  fmt.Println("Connected to Redis.")
 
-	return
+  return
 }
 
 func (sm *WhitelabelShardManager) connectRedis() (err error) {
-	threads, err := strconv.Atoi(os.Getenv("SHARDER_REDIS_THREADS"))
-	if err != nil {
-		return
-	}
+  threads, err := strconv.Atoi(os.Getenv("SHARDER_REDIS_THREADS"))
+  if err != nil {
+    return
+  }
 
-	options := &redis.Options{
-		Network:      "tcp",
-		Addr:         os.Getenv("SHARDER_REDIS_ADDR"),
-		Password:     os.Getenv("SHARDER_REDIS_PASSWD"),
-		PoolSize:     threads,
-		MinIdleConns: threads,
-	}
+  options := &redis.Options{
+    Network:      "tcp",
+    Addr:         os.Getenv("SHARDER_REDIS_ADDR"),
+    Password:     os.Getenv("SHARDER_REDIS_PASSWD"),
+    PoolSize:     threads,
+    MinIdleConns: threads,
+  }
 
-	sm.redisClient = redis.NewClient(options)
+  sm.redisClient = redis.NewClient(options)
 
-	// test conn
-	return sm.redisClient.Ping().Err()
+  // test conn
+  return sm.redisClient.Ping().Err()
 }
 
 func (sm *WhitelabelShardManager) Connect() error {
-	bots, err := sm.db.Whitelabel.GetBotsBySharder(sm.total, sm.id)
-	if err != nil {
-		return err
-	}
+  bots, err := sm.db.Whitelabel.GetBotsBySharder(sm.total, sm.id)
+  if err != nil {
+    return err
+  }
 
-	for _, bot := range bots {
-		sm.connectBot(bot)
-	}
+  for _, bot := range bots {
+    sm.connectBot(bot)
+  }
 
-	return nil
+  return nil
 }
 
 func (sm *WhitelabelShardManager) IsWhitelabel() bool {
-	return true
+  return true
 }
 
 func (sm *WhitelabelShardManager) getRedis() *redis.Client {
-	return sm.redisClient
+  return sm.redisClient
 }
 
 func (sm *WhitelabelShardManager) getCache() *cache.PgCache {
-	return &sm.cache
+  return &sm.cache
 }
 
 func (sm *WhitelabelShardManager) onFatalError(token string, err error) {
-	sm.db.Whitelabel.DeleteByToken(token)
+  sm.db.Whitelabel.DeleteByToken(token)
 
-	// find bot id
-	var id uint64
-	sm.tokensLock.RLock()
-	for botId, botToken := range sm.tokens {
-		if botToken == token {
-			id = botId
-			break
-		}
-	}
-	sm.tokensLock.RUnlock()
+  // find bot id
+  var id uint64
+  sm.tokensLock.RLock()
+  for botId, botToken := range sm.tokens {
+    if botToken == token {
+      id = botId
+      break
+    }
+  }
+  sm.tokensLock.RUnlock()
 
-	sm.db.WhitelabelErrors.Append(id, err.Error())
+  sm.db.WhitelabelErrors.Append(id, err.Error())
 }
 
 // ListenNewTokens before connect
 func (sm *WhitelabelShardManager) ListenNewTokens() {
-	ch := make(chan tokenchange.TokenChangeData)
-	go tokenchange.ListenTokenChange(sm.redisClient, ch)
+  ch := make(chan tokenchange.TokenChangeData)
+  go tokenchange.ListenTokenChange(sm.redisClient, ch)
 
-	for payload := range ch {
-		if payload.OldId%uint64(sm.total) != uint64(sm.id) {
-			continue
-		}
+  for payload := range ch {
+    if payload.OldId%uint64(sm.total) != uint64(sm.id) {
+      continue
+    }
 
-		sm.botsLock.Lock()
+    sm.botsLock.Lock()
 
-		for id, shard := range sm.bots {
-			if id == payload.OldId {
-				shard.Kill()
-				break
-			}
-		}
+    for id, shard := range sm.bots {
+      if id == payload.OldId {
+        shard.Kill()
+        break
+      }
+    }
 
-		sm.botsLock.Unlock()
+    sm.botsLock.Unlock()
 
-		sm.connectBot(database.WhitelabelBot{
-			UserId: 0, // UserId is not used by connectBot
-			BotId:  payload.NewId,
-			Token:  payload.Token,
-		})
-	}
+    sm.connectBot(database.WhitelabelBot{
+      UserId: 0, // UserId is not used by connectBot
+      BotId:  payload.NewId,
+      Token:  payload.Token,
+    })
+  }
 }
 
 func (sm *WhitelabelShardManager) connectBot(bot database.WhitelabelBot) {
-	sm.tokensLock.Lock()
-	sm.tokens[bot.BotId] = bot.Token
-	sm.tokensLock.Unlock()
+  sm.tokensLock.Lock()
+  sm.tokens[bot.BotId] = bot.Token
+  sm.tokensLock.Unlock()
 
-	// create ratelimiter
-	store := ratelimit.NewRedisStore(sm.redisClient, fmt.Sprintf("ratelimiter:%d", bot.BotId))
-	rateLimiter := ratelimit.NewRateLimiter(store, 1)
+  // create ratelimiter
+  store := ratelimit.NewRedisStore(sm.redisClient, fmt.Sprintf("ratelimiter:%d", bot.BotId))
+  rateLimiter := ratelimit.NewRateLimiter(store, 1)
 
-	shard := NewShard(sm, bot.Token, 0, rateLimiter, ShardOptions{
-		ShardCount: ShardCount{
-			Total:   1,
-			Lowest:  0,
-			Highest: 1,
-		},
-		GuildSubscriptions: false,
-		Presence:           user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(bot.BotId)),
-		Intents: []intents.Intent{
-			intents.Guilds,
-			intents.GuildMembers,
-			intents.GuildMessages,
-			intents.GuildMessageReactions,
-			intents.GuildWebhooks,
-			intents.DirectMessages,
-			intents.DirectMessageReactions,
-		},
-		LargeShardingBuckets: 1,
-	})
+  shard := NewShard(sm, bot.Token, 0, rateLimiter, ShardOptions{
+    ShardCount: ShardCount{
+      Total:   1,
+      Lowest:  0,
+      Highest: 1,
+    },
+    GuildSubscriptions: false,
+    Presence:           user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(bot.BotId)),
+    Intents: []intents.Intent{
+      intents.Guilds,
+      intents.GuildMembers,
+      intents.GuildMessages,
+      intents.GuildMessageReactions,
+      intents.GuildWebhooks,
+      intents.DirectMessages,
+      intents.DirectMessageReactions,
+    },
+    LargeShardingBuckets: 1,
+  })
 
-	sm.botsLock.Lock()
-	sm.bots[bot.BotId] = &shard
-	sm.botsLock.Unlock()
+  sm.botsLock.Lock()
+  sm.bots[bot.BotId] = &shard
+  sm.botsLock.Unlock()
 
-	go shard.EnsureConnect()
+  go shard.EnsureConnect()
 }
 
 func (sm *WhitelabelShardManager) getStatus(botId uint64) string {
-	customStatus, err := sm.db.WhitelabelStatuses.Get(botId)
-	if err != nil || customStatus == "" {
-		return "DM for help | t!help"
-	} else {
-		return customStatus
-	}
+  customStatus, err := sm.db.WhitelabelStatuses.Get(botId)
+  if err != nil || customStatus == "" {
+    return "DM for help | t!help"
+  } else {
+    return customStatus
+  }
 }
 
 func (sm *WhitelabelShardManager) ListenStatusUpdates() {
-	ch := make(chan uint64)
-	go statusupdates.Listen(sm.redisClient, ch)
-	for botId := range ch {
-		sm.botsLock.RLock()
-		shard, ok := sm.bots[botId]
-		sm.botsLock.RUnlock()
+  ch := make(chan uint64)
+  go statusupdates.Listen(sm.redisClient, ch)
+  for botId := range ch {
+    sm.botsLock.RLock()
+    shard, ok := sm.bots[botId]
+    sm.botsLock.RUnlock()
 
-		if ok {
-			shard.UpdateStatus(user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(botId)))
-		}
-	}
+    if ok {
+      shard.UpdateStatus(user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(botId)))
+    }
+  }
 }
 
 func (sm *WhitelabelShardManager) ListenDelete() {
-	ch := make(chan uint64)
-	go whitelabeldelete.Listen(sm.redisClient, ch)
-	for userId := range ch {
-		bot, err := sm.db.Whitelabel.GetByUserId(userId)
-		if err != nil {
-			fmt.Println(err.Error()) // TODO: Sentry
-			continue
-		}
+  ch := make(chan uint64)
+  go whitelabeldelete.Listen(sm.redisClient, ch)
+  for userId := range ch {
+    bot, err := sm.db.Whitelabel.GetByUserId(userId)
+    if err != nil {
+      fmt.Println(err.Error()) // TODO: Sentry
+      continue
+    }
 
-		sm.botsLock.RLock()
-		shard, ok := sm.bots[bot.BotId]
-		sm.botsLock.RUnlock()
+    sm.botsLock.RLock()
+    shard, ok := sm.bots[bot.BotId]
+    sm.botsLock.RUnlock()
 
-		if ok {
-			shard.Kill() // TODO: Sentry
+    if ok {
+      shard.Kill() // TODO: Sentry
 
-			sm.botsLock.Lock()
-			delete(sm.bots, bot.BotId)
-			sm.botsLock.Unlock()
-		}
-	}
+      sm.botsLock.Lock()
+      delete(sm.bots, bot.BotId)
+      sm.botsLock.Unlock()
+    }
+  }
 }
