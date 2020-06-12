@@ -164,8 +164,6 @@ func (sm *WhitelabelShardManager) getCache() *cache.PgCache {
 }
 
 func (sm *WhitelabelShardManager) onFatalError(token string, err error) {
-  sm.db.Whitelabel.DeleteByToken(token)
-
   // find bot id
   var id uint64
   sm.tokensLock.RLock()
@@ -181,6 +179,8 @@ func (sm *WhitelabelShardManager) onFatalError(token string, err error) {
   if bot, e := sm.db.Whitelabel.GetByBotId(id); e == nil { // TODO: Sentry
     sm.db.WhitelabelErrors.Append(bot.UserId, err.Error())
   }
+
+  sm.db.Whitelabel.DeleteByToken(token)
 }
 
 // ListenNewTokens before connect
