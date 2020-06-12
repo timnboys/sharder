@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/TicketsBot/common/statusupdates"
 	"github.com/TicketsBot/common/tokenchange"
+	"github.com/TicketsBot/common/whitelabeldelete"
 	"github.com/TicketsBot/database"
 	"github.com/go-redis/redis"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -263,6 +264,30 @@ func (sm *WhitelabelShardManager) ListenStatusUpdates() {
 
 		if ok {
 			shard.UpdateStatus(user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(botId)))
+		}
+	}
+}
+
+func (sm *WhitelabelShardManager) ListenDelete() {
+	ch := make(chan uint64)
+	go whitelabeldelete.Listen(sm.redisClient, ch)
+	for userId := range ch {
+		bot, err := sm.db.Whitelabel.GetByUserId(userId)
+		if err != nil {
+			fmt.Println(err.Error()) // TODO: Sentry
+			continue
+		}
+
+		sm.botsLock.RLock()
+		shard, ok := sm.bots[bot.BotId]
+		sm.botsLock.RUnlock()
+
+		if ok {
+			shard.Kill() // TODO: Sentry
+
+			sm.botsLock.Lock()
+			delete(sm.bots, bot.BotId)
+			sm.botsLock.Unlock()
 		}
 	}
 }

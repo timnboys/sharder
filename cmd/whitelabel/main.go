@@ -11,6 +11,7 @@ func main() {
 	}
 
 	go manager.ListenNewTokens()
+	go manager.ListenDelete()
 
 	if err := manager.Connect(); err != nil {
 		panic(err)
