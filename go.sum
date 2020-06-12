@@ -11,6 +11,8 @@ github.com/TicketsBot/database v0.0.0-20200527224851-af38534b57ab h1:QotvCe5e8uO
 github.com/TicketsBot/database v0.0.0-20200527224851-af38534b57ab/go.mod h1:eky4tBL+IZ0svPgTT0N/9i6j7ygHDQH3784DW+HgfcA=
 github.com/TicketsBot/database v0.0.0-20200529135345-514d743abfc2 h1:NIz3QuqzGLGy5HIrEGU9Vt/uAutB5qtTka2vf0+Dr5A=
 github.com/TicketsBot/database v0.0.0-20200529135345-514d743abfc2/go.mod h1:eky4tBL+IZ0svPgTT0N/9i6j7ygHDQH3784DW+HgfcA=
+github.com/TicketsBot/database v0.0.0-20200612164604-6baae2a2d109 h1:V195jub5jrfSjUtxKB9unYo27Vs9BDycEyESHa2KyhA=
+github.com/TicketsBot/database v0.0.0-20200612164604-6baae2a2d109/go.mod h1:eky4tBL+IZ0svPgTT0N/9i6j7ygHDQH3784DW+HgfcA=
 github.com/TicketsBot/ttlcache v1.6.1-0.20200405150101-acc18e37b261 h1:NHD5GB6cjlkpZFjC76Yli2S63/J2nhr8MuE6KlYJpQM=
 github.com/TicketsBot/ttlcache v1.6.1-0.20200405150101-acc18e37b261/go.mod h1:2zPxDAN2TAPpxUPjxszjs3QFKreKrQh5al/R3cMXmYk=
 github.com/boltdb/bolt v1.3.1 h1:JQmyP4ZBrce+ZQu0dY660FMfatumYDLun9hBCUVIkF4=
