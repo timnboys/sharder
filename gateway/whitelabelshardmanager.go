@@ -177,7 +177,10 @@ func (sm *WhitelabelShardManager) onFatalError(token string, err error) {
   }
   sm.tokensLock.RUnlock()
 
-  sm.db.WhitelabelErrors.Append(id, err.Error())
+  // get user ID
+  if bot, e := sm.db.Whitelabel.GetByBotId(id); e == nil { // TODO: Sentry
+    sm.db.WhitelabelErrors.Append(bot.UserId, err.Error())
+  }
 }
 
 // ListenNewTokens before connect
