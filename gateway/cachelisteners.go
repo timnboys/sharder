@@ -4,6 +4,7 @@ import (
 	"github.com/rxdn/gdl/gateway/payloads/events"
 	"github.com/rxdn/gdl/objects/member"
 	"github.com/sirupsen/logrus"
+	"time"
 )
 
 var cacheListeners = []interface{}{
@@ -46,8 +47,13 @@ func channelDeleteListener(s *Shard, e *events.ChannelDelete) {
 }
 
 func guildCreateListener(s *Shard, e *WrappedGuildCreate) {
-	_, exists := s.Cache.GetGuild(e.Id, false)
-	e.IsJoin = !exists
+	if _, exists := s.Cache.GetGuild(e.Id, false); !exists {
+		// don't mass DM everyone on cache purge lol
+		// check if bot joined in the last minute
+		if e.JoinedAt.Add(time.Minute).After(time.Now()) {
+			e.IsJoin = true
+		}
+	}
 
 	s.Cache.StoreGuild(e.Guild)
 }
