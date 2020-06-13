@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"github.com/TicketsBot/common/sentry"
 	"github.com/TicketsBot/common/statusupdates"
 	"github.com/TicketsBot/common/tokenchange"
 	"github.com/TicketsBot/common/whitelabeldelete"
@@ -33,6 +34,13 @@ type WhitelabelShardManager struct {
 }
 
 func NewWhitelabelShardManager() (manager *WhitelabelShardManager, err error) {
+	if err := sentry.Initialise(sentry.Options{
+		Dsn:     os.Getenv("SENTRY_DSN"),
+		Project: "whitelabel_sharder",
+	}); err != nil {
+		fmt.Println(err.Error())
+	}
+
 	manager = &WhitelabelShardManager{
 		bots:   make(map[uint64]*Shard),
 		tokens: make(map[uint64]string),
@@ -163,7 +171,7 @@ func (sm *WhitelabelShardManager) getCache() *cache.PgCache {
 	return &sm.cache
 }
 
-func (sm *WhitelabelShardManager) onFatalError(token string, err error) {
+func (sm *WhitelabelShardManager) onFatalError(token string, e error) {
 	// find bot id
 	var id uint64
 	sm.tokensLock.RLock()
@@ -176,11 +184,16 @@ func (sm *WhitelabelShardManager) onFatalError(token string, err error) {
 	sm.tokensLock.RUnlock()
 
 	// get user ID
-	if bot, e := sm.db.Whitelabel.GetByBotId(id); e == nil { // TODO: Sentry
-		sm.db.WhitelabelErrors.Append(bot.UserId, err.Error())
+	bot, err := sm.db.Whitelabel.GetByBotId(id)
+	if err == nil {
+		if err := sm.db.WhitelabelErrors.Append(bot.UserId, e.Error()); err != nil {
+			sentry.Error(err)
+		}
 	}
 
-	sm.db.Whitelabel.DeleteByToken(token)
+	if err := sm.db.Whitelabel.DeleteByToken(token); err != nil {
+		sentry.Error(err)
+	}
 }
 
 // ListenNewTokens before connect
@@ -195,7 +208,10 @@ func (sm *WhitelabelShardManager) ListenNewTokens() {
 
 			for id, shard := range sm.bots {
 				if id == payload.OldId {
-					shard.Kill()
+					if err := shard.Kill(); err != nil {
+						sentry.Error(err)
+					}
+
 					break
 				}
 			}
@@ -269,7 +285,9 @@ func (sm *WhitelabelShardManager) ListenStatusUpdates() {
 		sm.botsLock.RUnlock()
 
 		if ok {
-			shard.UpdateStatus(user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(botId)))
+			if err := shard.UpdateStatus(user.BuildStatus(user.ActivityTypePlaying, sm.getStatus(botId))); err != nil {
+				sentry.Error(err)
+			}
 		}
 	}
 }
@@ -283,7 +301,9 @@ func (sm *WhitelabelShardManager) ListenDelete() {
 		sm.botsLock.RUnlock()
 
 		if ok {
-			shard.Kill() // TODO: Sentry
+			if err := shard.Kill(); err != nil {
+				sentry.Error(err)
+			}
 
 			sm.botsLock.Lock()
 			delete(sm.bots, botId)

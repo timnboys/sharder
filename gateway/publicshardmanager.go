@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"github.com/TicketsBot/common/sentry"
 	"github.com/go-redis/redis"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rxdn/gdl/cache"
@@ -23,6 +24,13 @@ type PublicShardManager struct {
 }
 
 func NewPublicShardManager(options ShardOptions) (manager *PublicShardManager, err error) {
+	if err := sentry.Initialise(sentry.Options{
+		Dsn:     os.Getenv("SENTRY_DSN"),
+		Project: "public_sharder",
+	}); err != nil {
+		fmt.Println(err.Error())
+	}
+
 	manager = &PublicShardManager{
 		shards:  make(map[int]*Shard),
 		options: options,
@@ -106,7 +114,7 @@ func (sm *PublicShardManager) getCache() *cache.PgCache {
 }
 
 func (sm *PublicShardManager) onFatalError(token string, err error) {
-	// TODO: Implement something?
+	sentry.Error(err)
 }
 
 func (sm *PublicShardManager) buildRedisClient() (client *redis.Client, err error) {
