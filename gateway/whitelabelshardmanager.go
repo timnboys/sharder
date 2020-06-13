@@ -274,22 +274,16 @@ func (sm *WhitelabelShardManager) ListenStatusUpdates() {
 func (sm *WhitelabelShardManager) ListenDelete() {
   ch := make(chan uint64)
   go whitelabeldelete.Listen(sm.redisClient, ch)
-  for userId := range ch {
-    bot, err := sm.db.Whitelabel.GetByUserId(userId)
-    if err != nil {
-      fmt.Println(err.Error()) // TODO: Sentry
-      continue
-    }
-
+  for botId := range ch {
     sm.botsLock.RLock()
-    shard, ok := sm.bots[bot.BotId]
+    shard, ok := sm.bots[botId]
     sm.botsLock.RUnlock()
 
     if ok {
       shard.Kill() // TODO: Sentry
 
       sm.botsLock.Lock()
-      delete(sm.bots, bot.BotId)
+      delete(sm.bots, botId)
       sm.botsLock.Unlock()
     }
   }
