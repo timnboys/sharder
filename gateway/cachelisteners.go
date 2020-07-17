@@ -50,7 +50,7 @@ func guildCreateListener(s *Shard, e *WrappedGuildCreate) {
 	if _, exists := s.Cache.GetGuild(e.Id, false); !exists {
 		// don't mass DM everyone on cache purge lol
 		// check if bot joined in the last minute
-		if e.JoinedAt.Add(time.Minute).After(time.Now()) {
+		if time.Now().Sub(e.JoinedAt) < time.Minute {
 			e.IsJoin = true
 		}
 	}
